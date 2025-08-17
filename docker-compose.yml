@@ -1,0 +1,21 @@
+version: "3.9"
+services:
+  db:
+    image: postgres:16
+    container_name: coded-db
+    environment:
+      POSTGRES_USER: coded
+      POSTGRES_PASSWORD: codedpass
+      POSTGRES_DB: coded
+    ports:
+      - "5432:5432"
+    volumes:
+      - coded_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "coded"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+volumes:
+  coded_pg:
+  npx prisma init
