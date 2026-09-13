@@ -1,28 +1,36 @@
 name: Backend CI
-on: [push, pull_request]
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: coded
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd="pg_isready -U postgres"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
+
+    env:
+      DATABASE_URL: postgresql://maco:maco@localhost:5432/maco
+      JWT_SECRET: ci-test-secret
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20 }
-      - run: corepack enable
-      - run: pnpm i --frozen-lockfile || npm i
-      - run: echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/coded" >> .env
-      - run: npx prisma db push
-      - run: npx tsc --noEmit
-      - run: npm run build --if-present
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Build backend
+        run: npm run build

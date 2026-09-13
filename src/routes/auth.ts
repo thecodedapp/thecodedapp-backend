@@ -113,13 +113,19 @@ router.post("/signup", async (req, res) => {
         `,
       });
       
-      if (emailError) {
-        console.error("Failed to send verification email:", emailError);
-      
-        return res.status(500).json({
-          error: "Could not send verification email",
-        });
-      }
+if (emailError) {
+  console.error("Failed to send verification email:", emailError);
+
+  await prisma.user.delete({
+    where: {
+      id: user.id,
+    },
+  });
+
+  return res.status(500).json({
+    error: "Could not send verification email",
+  });
+}
 
     // 12. Create JWT
     const token = jwt.sign(
