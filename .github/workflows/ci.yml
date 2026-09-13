@@ -55,4 +55,16 @@ jobs:
         run: npm run build
 
       - name: Run integration tests
-        run: npm test
+        shell: bash
+        run: |
+          set +e
+          npm test -- --runInBand 2>&1 | tee test-output.txt
+          status=${PIPESTATUS[0]}
+
+          {
+            echo "## Backend test summary"
+            echo
+            grep -E "^(Test Suites:|Tests:|Snapshots:|Time:)" test-output.txt || true
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          exit $status
