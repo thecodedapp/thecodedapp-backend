@@ -88,7 +88,7 @@ router.post("/signup", async (req, res) => {
     });
 
     const { error: emailError } = await resend.emails.send({
-        from: "Maco <onboarding@resend.dev>",
+        from: "Maco <verify@learnmaco.com>",
         to: user.email,
         subject: "Your Maco verification code",
         html: `
@@ -351,6 +351,110 @@ router.get("/me", async (req, res) => {
   } catch (error) {
     return res.status(401).json({
       error: "Invalid or expired token",
+    });
+  }
+});
+router.post("/resend-verification", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        error: "Email is required",
+      });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const user = await prisma.user.findUnique({
+      where: {
+        email: normalizedEmail,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        error: "User not found",
+      });
+    }
+
+    if (user.emailVerified) {
+      return res.status(400).json({
+        error: "Email is already verified",
+      });
+    }
+
+    const verificationCode = randomInt(
+      100000,
+      1000000
+    ).toString();
+
+    const verificationCodeHash = await bcrypt.hash(
+      verificationCode,
+      10
+    );
+
+    const expiresAt = new Date(
+      Date.now() + 10 * 60 * 1000
+    );
+
+    await prisma.emailVerificationCode.deleteMany({
+      where: {
+        userId: user.id,
+      },
+    });
+
+    await prisma.emailVerificationCode.create({
+      data: {
+        userId: user.id,
+        codeHash: verificationCodeHash,
+        expiresAt,
+      },
+    });
+
+    const { error: emailError } = await resend.emails.send({
+      from: "Maco <verify@learnmaco.com>",
+      to: user.email,
+      subject: "Your new Maco verification code",
+      html: `
+        <div style="font-family: Arial, sans-serif;">
+          <h2>Here’s your new Maco code 🐸</h2>
+
+          <p>Your verification code is:</p>
+
+          <div style="
+            font-size: 32px;
+            font-weight: bold;
+            letter-spacing: 8px;
+            margin: 24px 0;
+          ">
+            ${verificationCode}
+          </div>
+
+          <p>This code expires in 10 minutes.</p>
+        </div>
+      `,
+    });
+
+    if (emailError) {
+      console.error(
+        "Failed to resend verification email:",
+        emailError
+      );
+
+      return res.status(500).json({
+        error: "Could not resend verification email",
+      });
+    }
+
+    return res.status(200).json({
+      message: "Verification code resent",
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      error: "Something went wrong",
     });
   }
 });
