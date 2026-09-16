@@ -19,6 +19,9 @@ const getUserIdFromRequest = (authorization?: string) => {
   return decoded.userId;
 };
 
+const canonicalHighestUnlockedLesson = (completedLessons: number[]) =>
+  completedLessons.length > 0 ? Math.max(...completedLessons) + 1 : 1;
+
 router.get("/", async (req, res) => {
   try {
     const userId = getUserIdFromRequest(req.headers.authorization);
@@ -61,6 +64,19 @@ router.put("/", async (req, res) => {
 
     const { goals, completedLessons, highestUnlockedLesson } = req.body ?? {};
 
+    const existingUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        completedLessons: true,
+        highestUnlockedLesson: true,
+      },
+    });
+
+    if (!existingUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
     const data: {
       goals?: string[];
       completedLessons?: number[];
@@ -75,6 +91,8 @@ router.put("/", async (req, res) => {
       data.goals = Array.from(new Set(goals.map((goal) => goal.trim()).filter(Boolean)));
     }
 
+    let nextCompletedLessons = existingUser.completedLessons;
+
     if (completedLessons !== undefined) {
       if (
         !Array.isArray(completedLessons) ||
@@ -87,9 +105,10 @@ router.put("/", async (req, res) => {
         });
       }
 
-      data.completedLessons = Array.from(new Set(completedLessons)).sort(
+      nextCompletedLessons = Array.from(new Set(completedLessons)).sort(
         (a, b) => a - b
       );
+      data.completedLessons = nextCompletedLessons;
     }
 
     if (highestUnlockedLesson !== undefined) {
@@ -102,16 +121,17 @@ router.put("/", async (req, res) => {
         });
       }
 
+      const expectedHighest = canonicalHighestUnlockedLesson(nextCompletedLessons);
+
+      if (highestUnlockedLesson !== expectedHighest) {
+        return res.status(400).json({
+          error: `highestUnlockedLesson must be ${expectedHighest} for the submitted completedLessons`,
+        });
+      }
+
       data.highestUnlockedLesson = highestUnlockedLesson;
-    }
-
-    const existingUser = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true },
-    });
-
-    if (!existingUser) {
-      return res.status(404).json({ error: "User not found" });
+    } else if (completedLessons !== undefined) {
+      data.highestUnlockedLesson = canonicalHighestUnlockedLesson(nextCompletedLessons);
     }
 
     const user = await prisma.user.update({
