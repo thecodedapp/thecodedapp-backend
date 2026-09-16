@@ -41,8 +41,13 @@ router.get("/", async (req, res) => {
     }
 
     return res.status(200).json(user);
-  } catch {
-    return res.status(401).json({ error: "Invalid or expired token" });
+  } catch (error) {
+    if (error instanceof jwt.JsonWebTokenError) {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+
+    console.error(error);
+    return res.status(500).json({ error: "Something went wrong" });
   }
 });
 
@@ -67,7 +72,7 @@ router.put("/", async (req, res) => {
         return res.status(400).json({ error: "goals must be an array of strings" });
       }
 
-      data.goals = goals;
+      data.goals = Array.from(new Set(goals.map((goal) => goal.trim()).filter(Boolean)));
     }
 
     if (completedLessons !== undefined) {
@@ -82,7 +87,9 @@ router.put("/", async (req, res) => {
         });
       }
 
-      data.completedLessons = completedLessons;
+      data.completedLessons = Array.from(new Set(completedLessons)).sort(
+        (a, b) => a - b
+      );
     }
 
     if (highestUnlockedLesson !== undefined) {
@@ -96,6 +103,15 @@ router.put("/", async (req, res) => {
       }
 
       data.highestUnlockedLesson = highestUnlockedLesson;
+    }
+
+    const existingUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+
+    if (!existingUser) {
+      return res.status(404).json({ error: "User not found" });
     }
 
     const user = await prisma.user.update({
