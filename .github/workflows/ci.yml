@@ -1,6 +1,7 @@
 name: Backend CI
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -8,9 +9,17 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
+  validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     services:
       postgres:
@@ -31,6 +40,7 @@ jobs:
       DATABASE_URL: postgresql://maco:maco@localhost:5432/maco_test
       JWT_SECRET: ci-test-secret
       RESEND_API_KEY: re_test_placeholder
+      NODE_ENV: test
 
     steps:
       - name: Checkout repository
@@ -43,13 +53,16 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Validate Prisma schema
+        run: npx prisma validate
 
       - name: Generate Prisma client
         run: npx prisma generate
 
-      - name: Prepare test database
-        run: npx prisma db push
+      - name: Prepare isolated test database
+        run: npx prisma db push --skip-generate
 
       - name: Build backend
         run: npm run build
@@ -62,7 +75,12 @@ jobs:
           status=${PIPESTATUS[0]}
 
           {
-            echo "## Backend test summary"
+            echo "## Backend CI summary"
+            echo
+            echo "- Prisma schema: validated"
+            echo "- Prisma client: generated"
+            echo "- Test database: prepared from current schema"
+            echo "- TypeScript build: passed"
             echo
             grep -E "^(Test Suites:|Tests:|Snapshots:|Time:)" test-output.txt || true
           } >> "$GITHUB_STEP_SUMMARY"
