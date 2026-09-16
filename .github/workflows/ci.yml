@@ -61,8 +61,11 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate
 
-      - name: Prepare isolated test database
-        run: npx prisma db push --skip-generate
+      - name: Apply migration chain to isolated test database
+        run: npm run prisma:deploy
+
+      - name: Verify migration status
+        run: npx prisma migrate status
 
       - name: Build backend
         run: npm run build
@@ -79,7 +82,8 @@ jobs:
             echo
             echo "- Prisma schema: validated"
             echo "- Prisma client: generated"
-            echo "- Test database: prepared from current schema"
+            echo "- Migration chain: applied successfully to fresh Postgres"
+            echo "- Migration status: clean"
             echo "- TypeScript build: passed"
             echo
             grep -E "^(Test Suites:|Tests:|Snapshots:|Time:)" test-output.txt || true
