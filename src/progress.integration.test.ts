@@ -148,6 +148,52 @@ describe("/progress integration", () => {
       });
     });
 
+    it("derives highestUnlockedLesson when completed lessons change", async () => {
+      const response = await request(app)
+        .put("/progress")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ completedLessons: [1, 2, 3] });
+
+      expect(response.status).toBe(200);
+      expect(response.body.completedLessons).toEqual([1, 2, 3]);
+      expect(response.body.highestUnlockedLesson).toBe(4);
+    });
+
+    it("rejects an impossible highest unlocked lesson", async () => {
+      const response = await request(app)
+        .put("/progress")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          completedLessons: [1],
+          highestUnlockedLesson: 50,
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        error: "highestUnlockedLesson must be 2 for the submitted completedLessons",
+      });
+    });
+
+    it("rejects an inconsistent highest unlocked lesson against existing progress", async () => {
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          completedLessons: [1, 2],
+          highestUnlockedLesson: 3,
+        },
+      });
+
+      const response = await request(app)
+        .put("/progress")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ highestUnlockedLesson: 7 });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        error: "highestUnlockedLesson must be 3 for the submitted completedLessons",
+      });
+    });
+
     it("supports partial updates without erasing other progress", async () => {
       await prisma.user.update({
         where: { id: userId },
