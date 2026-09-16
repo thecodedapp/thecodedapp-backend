@@ -11,6 +11,16 @@ describe("Maco API", () => {
     });
   });
 
+  it("reports ready when the database is reachable", async () => {
+    const response = await request(app).get("/health/ready");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      ok: true,
+      database: "ready",
+    });
+  });
+
   it("rejects login when email and password are missing", async () => {
     const response = await request(app)
       .post("/auth/login")
